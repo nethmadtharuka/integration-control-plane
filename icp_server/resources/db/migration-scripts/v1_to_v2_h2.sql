@@ -69,17 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_org_secrets_environment ON org_secrets (environme
 -- ============================================================================
 -- STEP 2 — Add key_id column to runtimes (if not already present)
 -- ============================================================================
-
 ALTER TABLE runtimes ADD COLUMN IF NOT EXISTS key_id VARCHAR(16);
-
--- NOTE: not guarded with an existence check — H2 does not support
--- conditional constraint creation. This matches the same non-idempotent
--- behaviour as the equivalent ALTER in v1_to_v2_mysql.sql. Run this script
--- only once per database; running it twice will error on this line if the
--- constraint already exists (safe to ignore in that case).
-ALTER TABLE runtimes
-    ADD CONSTRAINT fk_runtime_key_id FOREIGN KEY (key_id)
-        REFERENCES org_secrets (key_id) ON DELETE SET NULL;
 
 -- ============================================================================
 -- STEP 3 — Create mi_composite_app_artifacts table (if not already present)
@@ -101,6 +91,22 @@ CREATE TABLE IF NOT EXISTS mi_composite_app_artifacts (
 CREATE INDEX IF NOT EXISTS idx_mi_composite_app_artifacts_runtime_id ON mi_composite_app_artifacts (runtime_id);
 CREATE INDEX IF NOT EXISTS idx_mi_composite_app_artifacts_app_name ON mi_composite_app_artifacts (app_name);
 CREATE INDEX IF NOT EXISTS idx_mi_composite_app_artifacts_state ON mi_composite_app_artifacts (state);
+
+-- ============================================================================
+-- STEP 4 — Add key_id foreign key constraint on runtimes
+-- ============================================================================
+--
+-- NOTE: not guarded with an existence check — H2 does not support
+-- conditional constraint creation. This matches the same non-idempotent
+-- behaviour as the equivalent ALTER in v1_to_v2_mysql.sql. Placed last so
+-- that if this statement fails on a rerun (constraint already exists),
+-- all the idempotent table/index creation above has already completed
+-- successfully. Safe to ignore an error on this line on a second run.
+
+ALTER TABLE runtimes
+    ADD CONSTRAINT fk_runtime_key_id FOREIGN KEY (key_id)
+        REFERENCES org_secrets (key_id) ON DELETE SET NULL;
+
 
 -- No trigger for updated_at: consistent with h2_init.sql, which does not
 -- use database-level triggers for updated_at maintenance on any table
